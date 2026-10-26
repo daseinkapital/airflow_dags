@@ -26,13 +26,11 @@ def process_bandcamp_files():
 
         cmd = [
             "bandcampsync",
-            "--cookies",
+            "-c",
             COOKIE_PATH,
-            "--directory",
+            "-d",
             BANDCAMP_STAGING_DIR,
-            "--format mp3-320",
-            "--temp-dir",
-            os.path.join(BANDCAMP_STAGING_DIR, ".tmp"),
+            "-f mp3-320"
         ]
 
         print(f"Running Bandcamp sync: {' '.join(cmd)}")
