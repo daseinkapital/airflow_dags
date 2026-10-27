@@ -35,15 +35,21 @@ def process_bandcamp_files():
         ]
 
         print(f"Running Bandcamp sync: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
 
-        if result.stdout:
-            print(result.stdout)
-        if result.stderr:
-            print(result.stderr)
+        if proc.stdout is not None:
+            for line in proc.stdout:
+                print(line, end="")
 
-        if result.returncode != 0:
-            raise RuntimeError(f"bandcampsync failed with exit code {result.returncode}")
+        return_code = proc.wait()
+        if return_code != 0:
+            raise RuntimeError(f"bandcampsync failed with exit code {return_code}")
 
         return BANDCAMP_STAGING_DIR
 
