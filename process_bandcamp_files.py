@@ -32,6 +32,8 @@ def process_bandcamp_files():
             BANDCAMP_STAGING_DIR,
             "-f",
             "mp3-320",
+            "-t",
+            BANDCAMP_STAGING_DIR,
         ]
 
         print(f"Running Bandcamp sync: {' '.join(cmd)}")
