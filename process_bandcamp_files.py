@@ -30,7 +30,8 @@ def process_bandcamp_files():
             COOKIE_PATH,
             "-d",
             BANDCAMP_STAGING_DIR,
-            "-f mp3-320"
+            "-f",
+            "mp3-320",
         ]
 
         print(f"Running Bandcamp sync: {' '.join(cmd)}")
@@ -47,41 +48,70 @@ def process_bandcamp_files():
         return BANDCAMP_STAGING_DIR
 
     @task
-    def move_downloads_to_music(staging_dir: str) -> str:
+    def list_album_dirs(staging_dir: str) -> list[str]:
         staging_path = Path(staging_dir)
         if not staging_path.exists():
             raise FileNotFoundError(f"Bandcamp staging directory does not exist: {staging_dir}")
 
+        albums = []
+        for child in sorted(staging_path.iterdir()):
+            if child.name.startswith("."):
+                continue
+            if child.name in {"music", "downloads"}:
+                continue
+            if child.is_dir():
+                albums.append(str(child))
+        return albums
+
+    @task
+    def move_album(album_dir: str) -> str:
+        src_dir = Path(album_dir)
+        if not src_dir.is_dir():
+            raise FileNotFoundError(f"Album directory not found: {album_dir}")
+
         music_path = Path(MUSIC_DIR)
         music_path.mkdir(parents=True, exist_ok=True)
 
-        moved = 0
-        for entry in sorted(staging_path.iterdir()):
-            if entry.name.startswith("."):
-                continue
-            if entry.name in {"music", "downloads"}:
-                continue
+        dest_dir = music_path / src_dir.name
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
-            dest = music_path / entry.name
-            if entry.is_dir():
-                if dest.exists():
-                    print(f"Destination already exists, skipping: {dest}")
-                    continue
-                shutil.move(str(entry), str(dest))
-                moved += 1
-            elif entry.is_file():
-                if dest.exists():
-                    continue
-                shutil.move(str(entry), str(dest))
-                moved += 1
+        for src_root, _, files in os.walk(src_dir):
+            src_root_path = Path(src_root)
+            rel_root = src_root_path.relative_to(src_dir)
+            target_root = dest_dir / rel_root
+            target_root.mkdir(parents=True, exist_ok=True)
 
-        print(f"Moved {moved} item(s) from Bandcamp staging into {MUSIC_DIR}")
-        return str(music_path)
+            for filename in files:
+                src_file = src_root_path / filename
+                dst_file = target_root / filename
+                if dst_file.exists():
+                    print(f"Replacing existing file: {dst_file}")
+                    dst_file.unlink()
+                shutil.move(str(src_file), str(dst_file))
+
+        for path in sorted(src_dir.rglob("*"), reverse=True):
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                try:
+                    path.rmdir()
+                except OSError:
+                    pass
+
+        if src_dir.exists():
+            try:
+                src_dir.rmdir()
+            except OSError:
+                pass
+
+        print(f"Moved album from {src_dir} to {dest_dir}")
+        return str(dest_dir)
 
     sync_task = sync_bandcamp_downloads()
-    move_task = move_downloads_to_music(sync_task)
+    album_dirs = list_album_dirs(sync_task)
+    moved_albums = move_album.expand(album_dir=album_dirs)
 
-    sync_task >> move_task
+    sync_task >> album_dirs >> moved_albums
 
 
 process_bandcamp_files()
